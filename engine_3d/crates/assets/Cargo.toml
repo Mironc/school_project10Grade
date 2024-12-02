@@ -1,0 +1,16 @@
+[package]
+name = "assets"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+graphics ={ path = "../graphics"}
+glam = "0.29.2"
+positioned-io = "0.3.3"
+byteorder = "1.5.0"
+thiserror = "1.0.60"
+zstd = {version = "0.13.1",features = ["zdict_builder"]}
+image = {version = "0.25.2",default-features = false,features = ["default-formats"]}
+
+[build-dependencies]
+assets = "*"
