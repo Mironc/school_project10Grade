@@ -1,16 +1,17 @@
 use glutin::config::{Config, ConfigTemplateBuilder};
-use glutin::context::{ContextApi, ContextAttributesBuilder, NotCurrentContext, Version};
+use glutin::context::{
+    ContextApi, ContextAttributesBuilder, NotCurrentContext, Version,
+};
 use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
-use glutin::surface::{Surface, SurfaceAttributes, SwapInterval, WindowSurface};
+use glutin::surface::{Surface, SwapInterval, WindowSurface};
 use graphics::objects::viewport::Viewport;
 use image::DynamicImage;
 use raw_window_handle::HasWindowHandle;
 use std::num::NonZero;
 use std::ops::{Deref, DerefMut};
 use winit::dpi::LogicalSize;
-use winit::event_loop::{ControlFlow, DeviceEvents, EventLoop};
-use winit::platform::windows::WindowExtWindows;
+use winit::event_loop::EventLoop;
 use winit::window::{self, Icon, WindowAttributes};
 
 use glutin_winit::{DisplayBuilder, GlWindow};
@@ -47,11 +48,12 @@ fn create_gl_context(window: &window::Window, gl_config: &Config) -> NotCurrentC
     let raw_window_handle = window.window_handle().ok().map(|wh| wh.as_raw());
 
     let context_attributes = ContextAttributesBuilder::new()
-        .with_context_api(ContextApi::OpenGl(Some(Version { major: 3, minor: 2 })))
+    .with_context_api(ContextApi::OpenGl(Some(Version { major: 4, minor: 3 })))
+        .with_debug(true)
         .build(raw_window_handle);
 
     let fallback_context_attributes = ContextAttributesBuilder::new()
-        .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
+    .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
         .build(raw_window_handle);
 
     let legacy_context_attributes = ContextAttributesBuilder::new()
@@ -148,8 +150,8 @@ impl Window {
     pub(crate) fn show_frame(&mut self) {
         self.gl_surface.swap_buffers(&self.context).unwrap();
     }
-    pub fn get_viewport(&self) -> &Viewport {
-        &self.viewport
+    pub fn viewport(&self) -> Viewport {
+        self.viewport
     }
 }
 impl Deref for Window {

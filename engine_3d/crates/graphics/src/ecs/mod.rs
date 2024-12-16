@@ -17,5 +17,6 @@ pub fn init(world:&mut World){
     world.register::<Camera>();
     world.register::<Transform>();
     world.insert(ResizeEvent::default());
+    world.insert(Sun::default());
     //world.insert(MainCamera::);
 }

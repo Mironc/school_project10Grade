@@ -105,9 +105,11 @@ pub struct Texture2D {
     wrap_y: TextureWrap,
     min_filter: Filter,
     mag_filter: Filter,
-    data_type:TextureType,
+    data_type: TextureType,
     internal_format: TextureFormat,
-    texture_format: TextureFormat
+    texture_format: TextureFormat,
+    height:i32,
+    width:i32,
 }
 impl Texture2D {
     pub fn new() -> Self {
@@ -121,8 +123,10 @@ impl Texture2D {
                 min_filter: Filter::Nearest,
                 mag_filter: Filter::Nearest,
                 internal_format: TextureFormat::RGBA,
-                texture_format:TextureFormat::RGBA,
+                texture_format: TextureFormat::RGBA,
                 data_type: TextureType::UnsignedByte,
+                height: 0,
+                width: 0,
             }
         }
     }
@@ -145,10 +149,10 @@ impl Texture2D {
     pub fn internal_format(&self) -> TextureFormat {
         self.internal_format
     }
-    pub fn texture_format(&self) -> TextureFormat{
+    pub fn texture_format(&self) -> TextureFormat {
         self.texture_format
     }
-    pub fn texture_type(&self) -> TextureType{
+    pub fn texture_type(&self) -> TextureType {
         self.data_type
     }
     pub fn mag_filter(&self) -> Filter {
@@ -163,20 +167,28 @@ impl Texture2D {
     pub fn wrap_y(&self) -> TextureWrap {
         self.wrap_y
     }
+    pub fn width(&self) -> i32{
+        self.width
+    }
+    pub fn height(&self) -> i32{
+        self.height
+    }
     pub fn white() -> Self {
         let mut image = RgbaImage::new(1, 1);
         image.fill(255);
         Texture2DBuilder::new()
             .filter(Filter::Linear)
             .image(DynamicImage::ImageRgba8(image))
-            .build().unwrap()
+            .build()
+            .unwrap()
     }
     pub fn black() -> Self {
         let mut image = RgbaImage::new(1, 1);
         image.fill(0);
         Texture2DBuilder::new()
             .image(DynamicImage::ImageRgba8(image))
-            .build().unwrap()
+            .build()
+            .unwrap()
     }
     pub fn set_texture_wrap_x(&mut self, texture_wrap: TextureWrap) {
         self.wrap_x = texture_wrap;
@@ -251,6 +263,8 @@ impl Texture2D {
         self.internal_format = internal_format;
         self.texture_format = texture_format;
         self.data_type = texture_type;
+        self.width = width;
+        self.height = height;
         unsafe {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
@@ -289,20 +303,26 @@ impl TextureWrap {
 pub enum Filter {
     Linear,
     Nearest,
+    NearestLinearMipMap,
+    NearestMipMap,
 }
 impl Filter {
     pub fn to_param(&self) -> u32 {
         match self {
             Filter::Linear => gl::LINEAR,
             Filter::Nearest => gl::NEAREST,
+            Filter::NearestMipMap => gl::NEAREST_MIPMAP_NEAREST,
+            Filter::NearestLinearMipMap => gl::NEAREST_MIPMAP_LINEAR,
         }
     }
 }
 #[derive(Debug, Clone, Copy)]
 pub enum TextureType {
+    Byte,
+    Int,
     UnsignedInt,
-    UnsignedInt24_8,
     UnsignedByte,
+    UnsignedInt24_8,
     Float,
     HalfFloat,
 }
@@ -314,6 +334,8 @@ impl TextureType {
             TextureType::Float => gl::FLOAT,
             TextureType::HalfFloat => gl::HALF_FLOAT,
             TextureType::UnsignedInt24_8 => gl::UNSIGNED_INT_24_8,
+            TextureType::Int => gl::INT,
+            TextureType::Byte => gl::BYTE,
         }
     }
 }
@@ -379,6 +401,33 @@ impl TextureFormat {
             TextureFormat::Stencil8 => gl::STENCIL_INDEX8,
             TextureFormat::RGB10A2 => gl::RGB10_A2,
             TextureFormat::RGBA8SNorm => gl::RGBA8_SNORM,
+        }
+    }
+    pub fn to_texture_type(&self) -> TextureType {
+        match self {
+            TextureFormat::RGBAu32 | TextureFormat::RGBu32 => TextureType::UnsignedInt,
+            TextureFormat::RGBA16F
+            | TextureFormat::RG16F
+            | Self::R11G11B10F
+            | Self::DepthComponent32F
+            | TextureFormat::RGB16F => TextureType::Float,
+
+            TextureFormat::RGB8SNorm | TextureFormat::RGBA8SNorm => TextureType::Byte,
+            TextureFormat::Stencil8
+            | TextureFormat::StencilIndex
+            | TextureFormat::DepthStencilComponent
+            | TextureFormat::RGBA8
+            | TextureFormat::RGB8
+            | TextureFormat::RGBA
+            | TextureFormat::RGB
+            | TextureFormat::RGB16
+            | TextureFormat::RGBA16
+            | TextureFormat::DepthComponent
+            | TextureFormat::BGRA
+            | TextureFormat::RGB9E5
+            | TextureFormat::RGB10A2
+            | TextureFormat::RgbaSrgb => TextureType::UnsignedByte,
+            TextureFormat::Depth24Stencil8 => TextureType::UnsignedInt24_8,
         }
     }
 }

@@ -206,6 +206,9 @@ impl VAO {
             }
         }
     }
+    pub fn unbind(){
+        Self{id:0}.bind();
+    }
 }
 impl Drop for VAO {
     fn drop(&mut self) {

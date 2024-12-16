@@ -1,5 +1,5 @@
 use engine_3d::{
-    graphics::ecs::{MainCamera, Camera},
+    graphics::ecs::{Camera, MainCamera},
     input_handler::SharedInputState,
     math::vec3,
     specs::*,
@@ -20,7 +20,7 @@ impl<'a> System<'a> for FreeCameraSystem {
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (mut cameras, mut shared_input_state, mut main_c, time) = data;
+        let (mut camera_storage, mut shared_input_state, main_c, time) = data;
 
         let input_state = shared_input_state.input_state();
         let movement_z = (input_state.button_repeat("s") as i32
@@ -31,17 +31,14 @@ impl<'a> System<'a> for FreeCameraSystem {
             * self.move_speed;
         //println!("{} {} {:?} {:?} {:?} {:?}",movement_x,movement_z,input_state.button("w"),input_state.button("s"),input_state.button("a"),input_state.button("d"));
         let (mouse_move_x, mouse_move_y) = input_state.mouse_move();
-        for camera in (&mut cameras).join() {
-            let transform = &mut camera.transform;
-            let x_diff = mouse_move_y * time.delta_time() * self.sensetivity;
-            let y_diff = mouse_move_x * time.delta_time() * self.sensetivity;
-            self.rotation_y += y_diff;
-            self.rotation_x += x_diff;
-            transform.set_rotation(vec3(self.rotation_x, self.rotation_y, 0.0));
+        let camera = camera_storage.get_mut(main_c.id().unwrap()).unwrap();//camera_storage.get_mut(main_c.id().unwrap()).unwrap();
 
-            transform.position += (movement_z * transform.forward()
-                + movement_x * transform.right())
-                * time.delta_time();
-        }
+        let x_diff = mouse_move_y * time.delta_time() * self.sensetivity;
+        let y_diff = mouse_move_x * time.delta_time() * self.sensetivity;
+        self.rotation_y += y_diff;
+        self.rotation_x += x_diff;
+        camera.transform.set_rotation(vec3(self.rotation_x, self.rotation_y, 0.0));
+        camera.transform.position +=
+            (movement_z * camera.transform.forward() + movement_x * camera.transform.right()) * time.delta_time();
     }
 }

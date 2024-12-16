@@ -1,2 +1,0 @@
-0,82 ms for 5 runs
-worst case - 0,33 ms

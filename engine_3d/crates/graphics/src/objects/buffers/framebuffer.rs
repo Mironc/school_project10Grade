@@ -1,9 +1,16 @@
-use glam::Vec4;
-use gl::{DRAW_FRAMEBUFFER, READ_FRAMEBUFFER};
+use std::any::Any;
 
-use crate::{ecs::BLIT_MODEL, objects::{
-    shader::Shader, texture::{Filter, Texture2D, Texture2DBuilder}, viewport::Viewport
-}};
+use gl::{DRAW_FRAMEBUFFER, READ_FRAMEBUFFER};
+use glam::Vec4;
+
+use crate::{
+    ecs::FULL_SCREEN,
+    objects::{
+        shader::Shader,
+        texture::{Filter, Texture2D, Texture2DBuilder},
+        viewport::Viewport,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub enum FramebufferError {
@@ -18,6 +25,7 @@ pub struct Framebuffer {
     attachments: Vec<(FramebufferAttachment, Option<Texture2D>)>,
 }
 static mut BINDED_FRAMEBUFFER: u32 = 0;
+static mut BINDED_DRAW_FRAMEBUFFER: u32 = 0;
 impl Framebuffer {
     pub fn new(viewport: Viewport) -> Self {
         unsafe {
@@ -34,10 +42,19 @@ impl Framebuffer {
     pub fn id(&self) -> u32 {
         self.id
     }
-    pub fn blit_with(&self,shader:&Shader){
+    pub fn blit_with(&self, shader: &Shader) {
         self.bind();
         shader.bind();
-        BLIT_MODEL.draw();
+        FULL_SCREEN.draw();
+    }
+    pub fn draw_bind(&self) {
+        unsafe {
+            if BINDED_DRAW_FRAMEBUFFER != self.id() {
+                gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.id);
+                gl::DrawBuffers(self.draw_buffers.len() as i32, self.draw_buffers.as_ptr());
+                BINDED_DRAW_FRAMEBUFFER = self.id;
+            }
+        }
     }
     pub fn bind(&self) {
         unsafe {
@@ -49,13 +66,13 @@ impl Framebuffer {
         }
     }
     pub fn clear_color(&self, color: Vec4) {
-        self.bind();
+        self.draw_bind();
         unsafe {
             gl::ClearColor(color.x, color.y, color.z, color.w);
         }
     }
     pub fn clear(&self, clear_flags: ClearFlags) {
-        self.bind();
+        self.draw_bind();
         unsafe {
             gl::Clear(clear_flags.bits());
         }
@@ -103,19 +120,14 @@ impl Framebuffer {
             }
         });
     }
-    pub fn bind_readbuffer(&self) {
+    pub fn read_bind(&self) {
         unsafe {
             gl::BindFramebuffer(READ_FRAMEBUFFER, self.id);
         }
     }
-    pub fn bind_drawbuffer(&self) {
-        unsafe {
-            gl::BindFramebuffer(DRAW_FRAMEBUFFER, self.id);
-        }
-    }
     pub fn copy_depth_to(&self, other: &Framebuffer, filter: Filter) {
-        self.bind_readbuffer();
-        other.bind_drawbuffer();
+        self.read_bind();
+        other.draw_bind();
         unsafe {
             gl::BlitFramebuffer(
                 0,
@@ -150,25 +162,24 @@ impl Framebuffer {
     }
     ///safe variety of framebuffer resize
     ///cause error only when used to default framebuffer
-    pub fn resize(&self, viewport: Viewport) -> Result<Self, FramebufferError> {
+    pub fn resize(&mut self, viewport: Viewport) -> Result<Framebuffer, FramebufferError> {
         if self.attachments.iter().any(|(_, x)| x.is_none()) {}
-        let mut new_fbo = Self::new(viewport);
-        for attachment in self.attachments.iter() {
-            let texture = attachment.1.as_ref().unwrap();
-            new_fbo.create_attachment(
+        let mut fbo = Framebuffer::new(viewport);
+        for attachment in self.attachments.iter_mut() {
+            let texture = attachment.1.as_mut().unwrap();
+            fbo.create_attachment(
                 attachment.0,
                 Texture2DBuilder::new()
                     .mag_filter(texture.mag_filter())
                     .min_filter(texture.min_filter())
-                    .internal_format(texture.internal_format())
-                    .texture_format(texture.texture_format())
-                    .texture_type(texture.texture_type())
                     .wrap_x(texture.wrap_x())
                     .wrap_y(texture.wrap_y())
-                    .size((viewport.width(), viewport.height())),
-            )
+                    .internal_format(texture.internal_format())
+                    .texture_format(texture.texture_format())
+                    .texture_type(texture.texture_type()),
+            );
         }
-        Ok(new_fbo)
+        Ok(fbo)
     }
     pub fn complete(&self) -> bool {
         self.bind();
@@ -182,11 +193,8 @@ impl Default for Framebuffer {
         Self {
             id: 0,
             viewport: Viewport::new(0, 0, 0, 0),
-            attachments: vec![
-                (FramebufferAttachment::Depth, None),
-                (FramebufferAttachment::Color(0), None),
-            ],
-            draw_buffers: vec![FramebufferAttachment::Color(0).into()],
+            attachments: vec![],
+            draw_buffers: vec![gl::FRONT_LEFT],
         }
     }
 }

@@ -9,3 +9,12 @@ pub fn end_debug_marker(){
         gl::PopDebugGroup();
     }
 }
+pub fn error_check() -> Result<(),u32>{
+    let err_code = unsafe {
+        gl::GetError()
+    };
+    if err_code != 0 {
+        return Err(err_code);
+    }
+    return Ok(())
+}

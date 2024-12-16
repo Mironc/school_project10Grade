@@ -3,7 +3,9 @@ use engine_3d::{
     graphics::{
         self as graphics,
         ecs::{
-            MainCamera, postprocessing::SimplePostProcessing, projection::*, Camera, CameraTransform, DeferredRendering, ForwardRendering, Light, LightProperties, Material, MeshRenderer, RenderSystem
+            postprocessing::SimplePostProcessing, projection::*, Camera, CameraTransform,
+            DeferredRendering, Light, LightProperties, MainCamera, Material, MeshRenderer,
+            OnResizeEvent, RenderSystem, Sun,
         },
         objects::texture::{Filter, Texture2DBuilder, TextureFormat, TextureWrap},
     },
@@ -35,27 +37,26 @@ fn main() {
     let mut world = World::new();
     graphics::ecs::init(&mut world);
     /* let model = assets
-        .import_model(&"models/pool.obj")
-        .unwrap()
-        .instantiate();
-    let text = assets.import_image("models/pool_text.png").unwrap();
-    world
-        .create_entity()
-        .with(MeshRenderer::new(model, None))
-        .with(Transform::default())
-        .with(Material {
-            main_texture: Texture2DBuilder::new()
-                .internal_format(TextureFormat::RGBA)
-                .filter(Filter::Linear)
-                .wrap(TextureWrap::Repeat)
-                .gen_mipmaps()
-                .image(text)
-                .build()
-                .unwrap(),
-            shininess: 64.0,
-            ..Default::default()
-        })
-        .build(); */
+    .import_model(&"models/pool.obj")
+    .unwrap()
+    .instantiate();
+    let text = assets.import_image("models/pool_text.png").unwrap();world
+    .create_entity()
+    .with(MeshRenderer::new(model, None))
+    .with(Transform::default())
+    .with(Material {
+        main_texture: Texture2DBuilder::new()
+            .internal_format(TextureFormat::RGBA)
+            .filter(Filter::Linear)
+            .wrap(TextureWrap::Repeat)
+            .gen_mipmaps()
+            .image(text)
+            .build()
+            .unwrap(),
+        shininess: 64.0,
+        ..Default::default()
+    })
+    .build(); */
     /*
     let model = assets
         .import_model("models/floor_wall.obj")
@@ -84,35 +85,47 @@ fn main() {
         })
         .build();
     */
-    //Plane
-     let model = assets
-           .import_model("models/plane.obj")
-           .unwrap()
-           .instantiate();
-       world
-           .create_entity()
-           .with(MeshRenderer::new(model, None))
-           .with(Transform::new(vec3(0.0, 0.0, 6.0), Vec3::ZERO, 0.125))
-           .with(Material {
-               shininess: 1023.0,
-               ..Default::default()
-           })
-           .build();
 
-       let model = assets
-           .import_model("models/obstacles.obj")
-           .unwrap()
-           .instantiate();
-       world
-           .create_entity()
-           .with(MeshRenderer::new(model, None))
-           .with(Transform::new(vec3(0.0, 0.0, 20.0), Vec3::ZERO, 0.25))
-           .with(Material {
-               shininess: 8.0,
-               ..Default::default()
-           })
-           .build();
-   
+    let checked_texture = Texture2DBuilder::new()
+        .image(assets.import_image("models/checked_texture.png").unwrap())
+        .filter(Filter::NearestLinearMipMap)
+        .build()
+        .unwrap();
+    checked_texture.gen_mipmaps();
+    //Plane
+    let plane = assets
+        .import_model("models/plane.obj")
+        .unwrap()
+        .instantiate();
+
+
+    world
+        .create_entity()
+        .with(MeshRenderer::new(plane, None))
+        .with(Transform::new(vec3(0.0, 0.0, 0.0), Vec3::ZERO, 0.125))
+        .with(Material {
+            shininess: 1024.0,
+            specular:0.3,
+            main_texture: checked_texture.clone(),
+            ..Default::default()
+        })
+        .build();
+
+    let obstacles = assets
+        .import_model("models/obstacles.obj")
+        .unwrap()
+        .instantiate();
+    world
+        .create_entity()
+        .with(MeshRenderer::new(obstacles, None))
+        .with(Transform::new(vec3(0.0, 0.0, 0.0), Vec3::ZERO, 0.125))
+        .with(Material {
+            shininess: 8.0,
+            main_texture: checked_texture.clone(),
+            ..Default::default()
+        })
+        .build();
+
     let main_camera = world
         .create_entity()
         .with(Camera::new(
@@ -120,14 +133,19 @@ fn main() {
                 1.0,
                 1000.0,
                 45.0,
-                app.app_state.window.get_viewport(),
+                app.app_state.window.viewport(),
             )),
-            CameraTransform::new(vec3(0.0, 6.1, 16.0), vec3(0.0, 0.7, 0.0)),
+            CameraTransform::new(vec3(0.0, 5.0, 16.0), vec3(0.0, 0.7, 0.0)),
         ))
         .build();
-    world.insert(MainCamera::new(main_camera));
-    let n = 100;
-    let mut rand = rand::prelude::StdRng::from_seed([192; 32]);
+    world.insert(MainCamera::new(
+        main_camera,
+        app.app_state.window.viewport(),
+    ));
+
+    //world.insert(Sun::new(vec3(-1.0, -1.0, 0.0), vec3(0.9, 0.84, 0.19)));
+    let n = 3000;
+    let mut rand = rand::prelude::StdRng::from_seed([102; 32]);
     for _ in 0..n {
         world
             .create_entity()
@@ -136,13 +154,13 @@ fn main() {
                 color: vec3(
                     rand.gen_range(0.1..1.0),
                     rand.gen_range(0.1..1.0),
-                    rand.gen_range(0.1..1.0),
+                    rand.gen_range(0.0..1.0),
                 ),
             }))
             .with(Transform::from_position(vec3(
                 rand.gen_range(-100.0..100.0),
                 rand.gen_range(0.1..5.0),
-                rand.gen_range(0.1..50.0),
+                rand.gen_range(-100.0..100.0),
             )))
             .build();
     }
@@ -150,33 +168,17 @@ fn main() {
         .create_entity()
         .with(Light::Point(LightProperties {
             power: 5.0,
-            color: vec3(
-                0.5,
-                1.0,
-                0.9,
-            ),
+            color: vec3(0.5, 1.0, 0.9),
         }))
-        .with(Transform::from_position(vec3(
-            1.0,
-            1.0,
-            25.0,
-        )))
+        .with(Transform::from_position(vec3(1.0, 1.0, 25.0)))
         .build();
     world
         .create_entity()
         .with(Light::Point(LightProperties {
             power: 10.0,
-            color: vec3(
-                1.0,
-                0.0,
-                0.9,
-            ),
+            color: vec3(1.0, 0.0, 0.9),
         }))
-        .with(Transform::from_position(vec3(
-            1.0,
-            2.0,
-            30.0,
-        )))
+        .with(Transform::from_position(vec3(1.0, 2.0, 30.0)))
         .build();
 
     let dispatcher = DispatcherBuilder::new()
@@ -185,16 +187,17 @@ fn main() {
                 sensetivity: 20.0,
                 move_speed: 5.0,
                 rotation_x: 0.0,
-                rotation_y: -90.0,
+                rotation_y: 0.0,
             },
             "FreeCameraSystem",
             &[],
         )
+        .with_thread_local(OnResizeEvent {})
         .with_thread_local(RenderSystem::new(
-            //ForwardRendering::new(*app.app_state.window.get_viewport(), true),
-            DeferredRendering::new(*app.app_state.window.get_viewport()),
-            app.app_state.window.get_viewport(),
-            SimplePostProcessing::new(1.0,1.2,0.0, *app.app_state.window.get_viewport())
+            //ForwardRendering::new(app.app_state.window.viewport(), true),
+            DeferredRendering::new(app.app_state.window.viewport()),
+            app.app_state.window.viewport(),
+            SimplePostProcessing::new(0.8, 1.,1.0, -0.1, 0.7,1.0, app.app_state.window.viewport()),
         ))
         .build();
     app.run(world, dispatcher)

@@ -1,10 +1,11 @@
 pub mod event_handler;
 pub mod input_handler;
 pub mod window;
+use graphics::ecs::ResizeEvent;
 use input_handler::InputHandler;
 use specs::{Dispatcher, World, WorldExt};
 use window::{Window, WindowConfig};
-use winit::{application::ApplicationHandler, event::DeviceEvent, event_loop::EventLoop};
+use winit::{application::ApplicationHandler, event_loop::EventLoop};
 pub struct ApplicationState {
     pub window: window::Window,
     input_handler: InputHandler,
@@ -35,6 +36,7 @@ impl ApplicationState {
                 world.write_resource::<time::Time>().update();
                 dispatcher.dispatch(&world);
                 self.input_handler._update();
+                world.write_resource::<ResizeEvent>().end();
                 self.window.request_redraw();
                 self.window.show_frame();
             }

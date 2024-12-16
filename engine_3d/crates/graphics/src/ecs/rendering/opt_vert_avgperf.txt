@@ -1,3 +1,0 @@
-0,66 ms avg for 5 frame
-worst case - 0,23 ms
-avg frames per second - 3400

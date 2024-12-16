@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 use winit::{
-    event::{ElementState, MouseButton, RawKeyEvent},
+    event::{ElementState, MouseButton},
     keyboard::Key,
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

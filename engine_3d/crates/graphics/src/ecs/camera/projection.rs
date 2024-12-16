@@ -1,4 +1,4 @@
-use glam::Mat4;
+use glam::{Mat4, Vec4};
 use specs::{Component, HashMapStorage};
 use super::super::super::objects::viewport::Viewport;
 
@@ -23,7 +23,7 @@ pub struct Orthogonal{
     height:f32
 }
 impl Orthogonal{
-    pub fn new(z_near:f32,z_far:f32,viewport:&Viewport) -> Self{
+    pub fn new(z_near:f32,z_far:f32,viewport:Viewport) -> Self{
         Self{
             width: viewport.width() as f32,
             height: viewport.height() as f32,
@@ -31,7 +31,7 @@ impl Orthogonal{
             z_near,
         }
     }
-    pub fn viewport_update(&mut self,viewport:&Viewport){
+    pub fn viewport_update(&mut self,viewport:Viewport){
         self.width = viewport.width() as f32;
         self.height = viewport.height() as f32;
     }
@@ -47,7 +47,7 @@ pub struct Perspective{
     aspect:f32,
 }
 impl Perspective {
-    pub fn new(z_near:f32,z_far:f32,fov:f32,viewport:&Viewport) -> Self{
+    pub fn new(z_near:f32,z_far:f32,fov:f32,viewport:Viewport) -> Self{
         Self { z_near, z_far, fov, aspect:viewport.width() as f32 / viewport.height() as f32 }
     }
     pub fn viewport_update(&mut self,viewport:Viewport){
@@ -66,7 +66,7 @@ impl Perspective {
         self.aspect
     }
     pub fn projection(&self) -> Mat4{
-        Mat4::perspective_rh_gl(self.fov.to_radians(), self.aspect, self.z_near, self.z_far)
+        Mat4::perspective_rh(self.fov.to_radians(), self.aspect, self.z_near, self.z_far)
     }
 }
 impl Default for Perspective {
