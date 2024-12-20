@@ -29,9 +29,8 @@ impl<'a> System<'a> for FreeCameraSystem {
         let movement_x = (input_state.button_repeat("a") as i32
             - input_state.button_repeat("d") as i32) as f32
             * self.move_speed;
-        //println!("{} {} {:?} {:?} {:?} {:?}",movement_x,movement_z,input_state.button("w"),input_state.button("s"),input_state.button("a"),input_state.button("d"));
         let (mouse_move_x, mouse_move_y) = input_state.mouse_move();
-        let camera = camera_storage.get_mut(main_c.id().unwrap()).unwrap();//camera_storage.get_mut(main_c.id().unwrap()).unwrap();
+        let camera = camera_storage.get_mut(main_c.id().unwrap()).unwrap();
 
         let x_diff = mouse_move_y * time.delta_time() * self.sensetivity;
         let y_diff = mouse_move_x * time.delta_time() * self.sensetivity;

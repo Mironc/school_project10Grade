@@ -1,4 +1,5 @@
 #version 430 core
+layout(early_fragment_tests) in;
 in vec4 texture_coordinates;
 //in flat int instance;
 uniform int instance;

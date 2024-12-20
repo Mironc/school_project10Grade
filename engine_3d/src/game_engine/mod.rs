@@ -24,16 +24,17 @@ impl ApplicationState {
             input_handler: InputHandler::new(),
         }
     }
-    pub(crate) fn set_focus(&mut self,focus:bool){
+    pub(crate) fn set_focus(&mut self, focus: bool) {
         self.focus = focus
     }
-    pub fn focus(&self) -> bool{
+    pub fn focus(&self) -> bool {
         self.focus
     }
     pub fn update(&mut self) {
         if let Some(dispatcher) = self.dispatcher.as_mut() {
             if let Some(world) = self.world.as_mut() {
                 world.write_resource::<time::Time>().update();
+                let time = world.read_resource::<time::Time>();
                 dispatcher.dispatch(&world);
                 self.input_handler._update();
                 world.write_resource::<ResizeEvent>().end();
@@ -52,14 +53,16 @@ impl ApplicationHandler for ApplicationState {
         println!("resumed")
     }
     fn device_event(
-            &mut self,
-            _event_loop: &winit::event_loop::ActiveEventLoop,
-            _device_id: winit::event::DeviceId,
-            event: winit::event::DeviceEvent,
-        ) {
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
         match event {
-            winit::event::DeviceEvent::MouseMotion { delta } => self.input_handler._mouse_motion(delta),
-            _=>(),
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                self.input_handler._mouse_motion(delta)
+            }
+            _ => (),
         }
     }
 
@@ -79,7 +82,7 @@ impl ApplicationHandler for ApplicationState {
     fn suspended(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         println!("suspended");
     }
-    
+
     fn memory_warning(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         println!("memory warning")
     }
@@ -99,7 +102,11 @@ impl Application {
         world.insert(self.app_state.input_handler.input_state());
         self.app_state.dispatcher = Some(dispatcher);
         self.app_state.world = Some(world);
-        self.app_state.dispatcher.as_mut().unwrap().dispatch(&self.app_state.world.as_ref().unwrap());
+        self.app_state
+            .dispatcher
+            .as_mut()
+            .unwrap()
+            .dispatch(&self.app_state.world.as_ref().unwrap());
         let _ = EventLoop::run_app(self.event_loop, &mut self.app_state);
     }
 }

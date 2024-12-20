@@ -17,6 +17,9 @@ impl Time {
     pub fn time(&self) -> f32 {
         self.time
     }
+    pub fn frame_count(&self) -> u64{
+        self.frame_count
+    }
     pub fn update(&mut self) {
         self.delta_time = self.last_frame.elapsed().as_secs_f32();
         self.time = self.startup.elapsed().as_secs_f32();

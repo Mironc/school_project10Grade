@@ -149,8 +149,6 @@ impl InstancedModel {
         }
         T::declaration();
         VAO::unbind();
-        Buffer::<EBO>::unbind();
-        Buffer::<VBO>::unbind();
         Self {
             vao,
             vbo,
@@ -163,7 +161,6 @@ impl InstancedModel {
         vao.bind();
         let vbo: Buffer<VBO> = Buffer::gen();
         vbo.bind();
-        Buffer::<VBO>::unbind();
         Self { vao, vbo, ebo: None, vertex_count }
     }
     pub fn draw(&self) {

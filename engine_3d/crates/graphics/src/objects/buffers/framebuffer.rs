@@ -97,6 +97,7 @@ impl Framebuffer {
                 0,
             );
         }
+        unsafe{BINDED_FRAMEBUFFER = 0}
         if let FramebufferAttachment::Color(_) = attachment {
             self.draw_buffers.push(attachment.into());
         }
@@ -167,17 +168,18 @@ impl Framebuffer {
         let mut fbo = Framebuffer::new(viewport);
         for attachment in self.attachments.iter_mut() {
             let texture = attachment.1.as_mut().unwrap();
-            fbo.create_attachment(
-                attachment.0,
-                Texture2DBuilder::new()
-                    .mag_filter(texture.mag_filter())
-                    .min_filter(texture.min_filter())
-                    .wrap_x(texture.wrap_x())
-                    .wrap_y(texture.wrap_y())
-                    .internal_format(texture.internal_format())
-                    .texture_format(texture.texture_format())
-                    .texture_type(texture.texture_type()),
-            );
+            texture.bind();
+            //So if 2 framebuffers shares same attachment they wont resize it twice
+            if texture.width() != viewport.width() && texture.height() != viewport.height() {
+                texture.finalize(
+                    texture.internal_format(),
+                    texture.texture_format(),
+                    texture.texture_type(),
+                    viewport.width(),
+                    viewport.height(),
+                );
+            }
+            fbo.add_attachment(attachment.0, texture.clone());
         }
         Ok(fbo)
     }

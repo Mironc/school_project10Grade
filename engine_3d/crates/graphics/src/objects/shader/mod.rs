@@ -7,6 +7,7 @@ use super::{
     texture::Texture2D,
 };
 
+static mut CURRENT_SHADER:u32 = 0;
 #[derive(Debug, Clone)]
 pub struct Shader {
     uniforms: HashMap<String, i32>,
@@ -17,29 +18,37 @@ impl Shader {
         self.id
     }
     pub fn set_matrix4(&mut self, uniform_name: &str, data: &Mat4) {
+        self.bind();
         unsafe { gl::UniformMatrix4fv(self.u_location(uniform_name), 1, gl::FALSE, &data.to_cols_array()[0]) }
     }
     pub fn set_vec3(&mut self, uniform_name: &str, data: &Vec3) {
+        self.bind();
         unsafe { gl::Uniform3fv(self.u_location(uniform_name), 1, &data[0]) }
     }
     pub fn set_vec2(&mut self, uniform_name: &str, data: &Vec2) {
+        self.bind();
         unsafe { gl::Uniform2fv(self.u_location(uniform_name), 1, &data[0]) }
     }
     pub fn set_f32(&mut self, uniform_name: &str, data: f32) {
+        self.bind();
         unsafe { gl::Uniform1f(self.u_location(uniform_name), data) }
     }
     pub fn set_int(&mut self, uniform_name: &str, data: i32) {
+        self.bind();
         unsafe { gl::Uniform1i(self.u_location(uniform_name), data) }
     }
     pub fn set_bool(&mut self, uniform_name: &str, data: bool) {
+        self.bind();
         self.set_int(uniform_name, data.into());
     }
     pub fn set_texture2d(&mut self, uniform_name: &str, data: &Texture2D, i: u32) {
+        self.bind();
         Texture2D::set_active(i);
         data.bind();
         self.set_int(uniform_name, i as i32);
     }
     pub fn set_shader_storage_block(&mut self, block_name: &str, buffer: &Buffer<ShaderStorage>,block_binding:u32) {
+        self.bind();
         unsafe {
             buffer.bind_buffer_base(block_binding);
             gl::ShaderStorageBlockBinding ( self.id, self.shader_storage_loc(block_name), block_binding );
@@ -105,8 +114,11 @@ impl Shader {
         }
     }
     pub fn bind(&self) {
-        unsafe {
-            gl::UseProgram(self.id);
+        if self.id() != unsafe{CURRENT_SHADER}{
+            unsafe {
+                gl::UseProgram(self.id);
+                CURRENT_SHADER = self.id()
+            }
         }
     }
 }

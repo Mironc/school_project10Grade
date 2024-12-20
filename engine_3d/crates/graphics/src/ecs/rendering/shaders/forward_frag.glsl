@@ -44,7 +44,7 @@ void main() {
         vec3 light_direction = normalize(light_props[i].light_position.xyz-position);
 
         float D = length(light_props[i].light_position.xyz-position);
-        float attenuation = 1.0/(D*D) * light_props[i].light_power;
+        float attenuation = (1.0/(D*D)) * light_props[i].light_power;
 
         vec3 diffuse_result = vec3(calc_diffuse(light_direction,norm)) ;
         

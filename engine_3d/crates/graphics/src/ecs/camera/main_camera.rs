@@ -1,8 +1,7 @@
-use specs::{Entities, Entity, ReadStorage, WriteStorage};
+use specs::{Entity, WriteStorage};
 
 use crate::objects::{
     buffers::{Framebuffer, FramebufferAttachment},
-    texture::{Filter, Texture2DBuilder, TextureFormat},
     viewport::Viewport,
 };
 

@@ -1,15 +1,15 @@
 use engine_3d::{
     assets::{image_importer::ImageImporter, model_importer::Modelmporter},
     graphics::{
-        self as graphics,
-        ecs::{
-            postprocessing::SimplePostProcessing, projection::*, Camera, CameraTransform,
-            DeferredRendering, Light, LightProperties, MainCamera, Material, MeshRenderer,
-            OnResizeEvent, RenderSystem, Sun,
-        },
-        objects::texture::{Filter, Texture2DBuilder, TextureFormat, TextureWrap},
+        self as graphics, depth, ecs::{
+            postprocessing::{PostProcessing, SimplePostProcessing}, projection::*, Camera, CameraTransform,
+            DeferredRendering, ForwardRendering, Light, LightProperties, MainCamera, Material,
+            MeshRenderer, OnResizeEvent, RenderSystem, Sun, FULLSCREENPASS_VERTEX_SHADER,
+        }, face_culling, objects::{
+            buffers::{Framebuffer, FramebufferAttachment}, shader::{Shader, ShaderType, SubShader}, texture::{Filter, Texture2D, Texture2DBuilder, TextureFormat, TextureWrap}, viewport::Viewport
+        }
     },
-    math::Vec3,
+    math::Vec3, window::gl_config_picker,
 };
 pub mod free_cam;
 use engine_3d::assets::Assets;
@@ -98,14 +98,17 @@ fn main() {
         .unwrap()
         .instantiate();
 
-
     world
         .create_entity()
         .with(MeshRenderer::new(plane, None))
-        .with(Transform::new(vec3(0.0, 0.0, 0.0), Vec3::ZERO, 0.125))
+        .with(Transform::new(
+            vec3(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            0.125,
+        ))
         .with(Material {
             shininess: 1024.0,
-            specular:0.3,
+            specular: 0.3,
             main_texture: checked_texture.clone(),
             ..Default::default()
         })
@@ -118,7 +121,11 @@ fn main() {
     world
         .create_entity()
         .with(MeshRenderer::new(obstacles, None))
-        .with(Transform::new(vec3(0.0, 0.0, 0.0), Vec3::ZERO, 0.125))
+        .with(Transform::new(
+            vec3(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 90.0, 0.0),
+            0.125,
+        ))
         .with(Material {
             shininess: 8.0,
             main_texture: checked_texture.clone(),
@@ -135,7 +142,7 @@ fn main() {
                 45.0,
                 app.app_state.window.viewport(),
             )),
-            CameraTransform::new(vec3(0.0, 5.0, 16.0), vec3(0.0, 0.7, 0.0)),
+            CameraTransform::new(vec3(0.0, 2.0, 6.0), vec3(0.0, 0.7, 0.0)),
         ))
         .build();
     world.insert(MainCamera::new(
@@ -144,7 +151,7 @@ fn main() {
     ));
 
     //world.insert(Sun::new(vec3(-1.0, -1.0, 0.0), vec3(0.9, 0.84, 0.19)));
-    let n = 3000;
+    let n = 1000;
     let mut rand = rand::prelude::StdRng::from_seed([102; 32]);
     for _ in 0..n {
         world
@@ -175,7 +182,7 @@ fn main() {
     world
         .create_entity()
         .with(Light::Point(LightProperties {
-            power: 10.0,
+            power: 50.0,
             color: vec3(1.0, 0.0, 0.9),
         }))
         .with(Transform::from_position(vec3(1.0, 2.0, 30.0)))
@@ -187,7 +194,7 @@ fn main() {
                 sensetivity: 20.0,
                 move_speed: 5.0,
                 rotation_x: 0.0,
-                rotation_y: 0.0,
+                rotation_y: 90.0,
             },
             "FreeCameraSystem",
             &[],
@@ -197,7 +204,7 @@ fn main() {
             //ForwardRendering::new(app.app_state.window.viewport(), true),
             DeferredRendering::new(app.app_state.window.viewport()),
             app.app_state.window.viewport(),
-            SimplePostProcessing::new(0.8, 1.,1.0, -0.1, 0.7,1.0, app.app_state.window.viewport()),
+            SimplePostProcessing::new(0.8, 1.0, 1.1, -0.0, 0.6, 1., app.app_state.window.viewport()),
         ))
         .build();
     app.run(world, dispatcher)

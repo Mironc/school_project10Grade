@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use specs::{Join, Read, ReadStorage, WriteStorage};
 use transform::Transform;
 
@@ -63,7 +63,7 @@ impl DeferredRendering {
             .filter(Filter::Nearest)
             .build()
             .unwrap();
-        out_framebuffer.add_attachment(FramebufferAttachment::DepthStencil, depth);
+        out_framebuffer.add_attachment(FramebufferAttachment::DepthStencil, depth.clone());
 
         let mut g_buffer = Framebuffer::new(viewport);
         //position attachment
@@ -89,12 +89,9 @@ impl DeferredRendering {
                 .texture_type(TextureType::Byte)
                 .filter(Filter::Linear),
         );
-        g_buffer.create_attachment(
+        g_buffer.add_attachment(
             FramebufferAttachment::Depth,
-            Texture2DBuilder::new()
-                .internal_format(TextureFormat::DepthComponent)
-                .texture_format(TextureFormat::DepthComponent)
-                .texture_type(TextureType::Float),
+            depth
         );
 
         let point_light_pass = Shader::new([
@@ -123,7 +120,7 @@ impl DeferredRendering {
             ),
         ]);
 
-        let point_light_volume: Model<ModelVertex> = from_str(include_str!("./icosahedron.obj")).unwrap();
+        let point_light_volume: Model<ModelVertex> = from_str(include_str!("./lq_icosahedron.obj")).unwrap();
         let mut verticies = Vec::new();
         for vert in point_light_volume.verticies.iter() {
             verticies.push(SimpleVertex::new(vert.position));
@@ -178,8 +175,6 @@ impl LitShading for DeferredRendering {
             mesh_renderer.model.draw();
         }
         //Lightning pass
-        self.g_buffer
-            .copy_depth_to(&self.out_framebuffer, Filter::Nearest);
         stencil::enable();
         self.out_framebuffer
             .clear(ClearFlags::Color | ClearFlags::Stencil);
@@ -230,13 +225,25 @@ impl LitShading for DeferredRendering {
                 });
             }
         }
+        self.point_light_props.bind();
         self.point_light_props.set_data(&lights);
         self.point_light_pass
             .set_shader_storage_block("lights", &self.point_light_props, 1);
+        self.point_light_pass
+            .set_vec3("camera_position", &camera.transform.position);
+        self.point_light_pass
+            .set_matrix4("vp", &(camera.get_projection() * camera.get_view()));
+        self.point_light_pass.set_matrix4(
+            "inv_vp",
+            &(camera.get_projection() * camera.get_view()).inverse(),
+        ); 
+        /* 
         self.stencil_pass.bind();
         self.stencil_pass
-            .set_shader_storage_block("lights", &self.point_light_props, 1);
-        start_debug_marker("stencil pass");
+            .set_shader_storage_block("lights", &self.point_light_props, 1); */
+
+
+        /* start_debug_marker("stencil pass");
         face_culling::set_cullface(CullFace::Front);
         depth::set_cmp_func(CompareOption::Less);
         stencil::set_stencil_function(StencilFunction::with_no_mask(CompareOption::Always, 1));
@@ -279,6 +286,45 @@ impl LitShading for DeferredRendering {
         for (i, _) in lights.iter().enumerate() {
             self.point_light_pass.set_int("instance", i as i32);
             self.point_light_volume.draw();
+        } 
+        end_debug_marker(); */
+        
+        stencil::enable();
+        for (i, light) in lights.iter().enumerate() {
+            self.point_light_pass.set_int("instance", i as i32);
+            let test_i =  (i%255) as i32 + 1;
+            if camera.transform.position.distance(light.light_position.xyz()) > light.light_power.sqrt() * 10.0{
+                face_culling::set_cullface(CullFace::Front);
+                depth::set_cmp_func(CompareOption::LessEqual);
+                stencil::set_stencil_function(StencilFunction::with_no_mask(CompareOption::Always, test_i));
+                color::set_write(false, false, false, false);
+                stencil::set_stencil_options(StencilOptions::new(
+                    Action::Keep,
+                    Action::Keep,
+                    Action::Replace,
+                ));
+                self.point_light_volume.draw();
+                stencil::set_stencil_function(StencilFunction::with_no_mask(
+                    CompareOption::GreaterEqual,
+                    test_i,
+                ));
+            }
+            else{
+                stencil::set_stencil_function(StencilFunction::with_no_mask(
+                    CompareOption::Always,
+                    0,
+                ));
+            }
+
+            color::set_write(true, true, true, true);
+            face_culling::set_cullface(CullFace::Back);
+            depth::set_cmp_func(CompareOption::GreaterEqual);
+            stencil::set_stencil_options(StencilOptions::new(
+                Action::Keep,
+                Action::Zero,
+                Action::Zero,
+            ));
+            self.point_light_volume.draw();
         }
 
         if let Some(direction) = sun.direction(){
@@ -299,7 +345,6 @@ impl LitShading for DeferredRendering {
             depth::disable();
             FULL_SCREEN.draw();
         }
-        end_debug_marker();
         stencil::disable();
         unsafe {
             gl::Disable(gl::BLEND);
