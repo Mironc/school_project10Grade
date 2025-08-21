@@ -4,5 +4,7 @@ I'm very confused with this architecture, so I gonna leave it like this.
 
 Next time i'm going to use Vulkan. 
 
+
 GLHF,
+
 Mironc
