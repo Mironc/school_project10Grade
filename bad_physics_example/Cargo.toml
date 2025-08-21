@@ -1,0 +1,17 @@
+[package]
+name = "bad_physics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+engine_3d ={ path = "../engine_3d"}
+rand = "*"
+itertools = "*"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+game = {path = "."}
+
+[[bench]]
+name = "my_benchmark"
+harness = false
