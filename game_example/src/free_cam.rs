@@ -1,5 +1,5 @@
 use engine_3d::{
-    graphics::ecs::{Camera, MainCamera},
+    rendering::camera::{Camera, MainCamera},
     input_handler::SharedInputState,
     math::vec3,
     specs::*,

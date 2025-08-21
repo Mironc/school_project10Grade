@@ -1,0 +1,11 @@
+[package]
+name = "rendering"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+specs = {path = "../specs"}
+graphics ={ path = "../graphics"}
+transform = {path = "../transform"}
+gl = {path = "../gl"}
+math = {path = "../math"}

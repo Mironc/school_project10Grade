@@ -1,0 +1,22 @@
+# Blender 4.3.2 MTL File: 'None'
+# www.blender.org
+
+newmtl test_test_alpha
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.501961 0.501961 0.501961
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd C:/Users/Амир/Downloads/hatsune-miku-chibi-w-stand/source/3DS - Hatsune Miku Project Mirai 2 - Miku Figure/MikuFigure/roomitems_002_alfa.png
+
+newmtl test_test_te_000_r1
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd C:/Users/Амир/Downloads/hatsune-miku-chibi-w-stand/source/3DS - Hatsune Miku Project Mirai 2 - Miku Figure/MikuFigure/roomitems_002_body.png

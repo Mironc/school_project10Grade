@@ -1,3 +1,6 @@
+use std::sync::{LazyLock, Mutex};
+use crate::objects::{model::InstancedModel, shader::{Shader, ShaderType, SubShader}, vertex::{IntoGLenum, Vertex}};
+
 pub fn start_debug_marker(name:&str){
     unsafe{
         let message = std::ffi::CString::new(name).unwrap();
@@ -18,3 +21,21 @@ pub fn error_check() -> Result<(),u32>{
     }
     return Ok(())
 }
+
+///
+pub static EMPTY: LazyLock<InstancedModel> =
+    LazyLock::new(|| InstancedModel::new_without_vertex(3));
+
+///
+pub static FULLSCREENPASS_VERTEX_SHADER: LazyLock<SubShader> =
+    LazyLock::new(|| SubShader::new(include_str!("./opt_vert.glsl"), ShaderType::Vertex));
+/// 
+pub static mut COPY_FRAGMENT_SHADER: LazyLock<Mutex<Shader>> = LazyLock::new(|| {
+    Mutex::new(Shader::new([
+        SubShader::new(
+            include_str!("./copy.glsl"),
+            ShaderType::Fragment,
+        ),
+        *FULLSCREENPASS_VERTEX_SHADER,
+    ]))
+});

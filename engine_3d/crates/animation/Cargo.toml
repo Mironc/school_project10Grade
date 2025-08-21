@@ -1,0 +1,10 @@
+[package]
+name = "animation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rendering = {path = "../rendering"}
+math ={ path = "../math"}
+specs ={ path = "../specs"}
+graphics ={ path = "../graphics"}

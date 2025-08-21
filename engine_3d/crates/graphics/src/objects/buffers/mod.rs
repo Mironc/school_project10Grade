@@ -45,7 +45,7 @@ pub struct Buffer<T> {
     id: u32,
 }
 impl<T> Buffer<T> {
-    pub fn gen() -> Self {
+    pub fn create() -> Self {
         let mut id = 0;
         unsafe {
             gl::GenBuffers(1, &mut id);
@@ -77,7 +77,7 @@ impl Buffer<Data> {
                 ARRAY_BUFFER,
                 (data.as_ref().len() * std::mem::size_of::<T>()) as isize,
                 data.as_ref().as_ptr() as *const _,
-                gl::STATIC_DRAW,
+                gl::STREAM_DRAW,
             )
         }
     }
@@ -154,7 +154,7 @@ impl Buffer<VBO> {
                 ARRAY_BUFFER,
                 (data.as_ref().len() * std::mem::size_of::<T>()) as isize,
                 data.as_ref().as_ptr() as *const _,
-                gl::STATIC_DRAW,
+                gl::STREAM_DRAW,
             )
         }
     }

@@ -1,7 +1,5 @@
 use glutin::config::{Config, ConfigTemplateBuilder};
-use glutin::context::{
-    ContextApi, ContextAttributesBuilder, NotCurrentContext, Version,
-};
+use glutin::context::{ContextApi, ContextAttributesBuilder, NotCurrentContext, Version};
 use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
 use glutin::surface::{Surface, SwapInterval, WindowSurface};
@@ -33,7 +31,7 @@ pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> + '_>) -> Confi
         let transparency_check = config.supports_transparency().unwrap_or(false)
             & !accum.supports_transparency().unwrap_or(false);
 
-        if transparency_check || config.num_samples() > accum.num_samples() {
+        if transparency_check || config.num_samples() < accum.num_samples() {
             config
         } else {
             accum
@@ -48,12 +46,12 @@ fn create_gl_context(window: &window::Window, gl_config: &Config) -> NotCurrentC
     let raw_window_handle = window.window_handle().ok().map(|wh| wh.as_raw());
 
     let context_attributes = ContextAttributesBuilder::new()
-    .with_context_api(ContextApi::OpenGl(Some(Version { major: 4, minor: 3 })))
+        .with_context_api(ContextApi::OpenGl(Some(Version { major: 4, minor: 3 })))
         .with_debug(true)
         .build(raw_window_handle);
 
     let fallback_context_attributes = ContextAttributesBuilder::new()
-    .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
+        .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
         .build(raw_window_handle);
 
     let legacy_context_attributes = ContextAttributesBuilder::new()
@@ -121,6 +119,10 @@ impl Window {
             let symbol = std::ffi::CString::new(symbol).unwrap();
             config.display().get_proc_address(symbol.as_c_str()).cast()
         });
+        unsafe{
+            gl::Enable(gl::SCISSOR_TEST);
+            gl::Scissor(0, 0, window_config.width as i32, window_config.height as i32);
+        }
 
         Self {
             window,

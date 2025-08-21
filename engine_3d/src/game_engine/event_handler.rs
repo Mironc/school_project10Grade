@@ -1,4 +1,4 @@
-use graphics::{ecs::ResizeEvent, objects::viewport::Viewport};
+use graphics::{resize_event::ResizeEvent, objects::viewport::Viewport};
 use specs::WorldExt;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop};
 
@@ -11,13 +11,14 @@ impl EventHandler {
             WindowEvent::Resized(physical_size)  if physical_size.height != 0 && physical_size.width != 0 =>{
                 if let Some(world) = &app.world{
                     let mut resize_event = world.write_resource::<ResizeEvent>();
-                    resize_event.send(&Viewport::new(0, 0, physical_size.width as i32 , physical_size.height as i32));
+                    resize_event.send(Viewport::new(0, 0, physical_size.width as i32 , physical_size.height as i32));
                 }
+                println!("{} {}",physical_size.width as i32 , physical_size.height as i32);
                 app.window
                     .update_viewport(physical_size.width, physical_size.height)
             }
             //WindowEvent::ScaleFactorChanged { scale_factor, inner_size_writer } => todo!(),
-            //WindowEvent::Moved(physical_position) => todo!(),
+            //WindowEvent::Moved(physical_position) => physical_position.to_logical(app.window.scale_factor()),
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => (),
             WindowEvent::RedrawRequested => app.update(),

@@ -1,8 +1,14 @@
-use glam::{ vec3, Vec3};
+use math::{ vec3, Vec3};
 
 use crate::{define_vertex, objects::vertex::{Vertex,IntoGLenum,ModelVertex}};
 use super::Model;
 define_vertex!{SimpleVertex,pos,f32,3}
+//TODO:ADD SOME PRIMITIVES
+pub struct Triangle<V:Vertex>{
+    p1:V,
+    p2:V,
+    p3:V,
+}
 pub fn icosahedron() -> Model<ModelVertex>{
     let t =(1.0 + 5.0f32.sqrt() ) / 2.0; 
     fn unit_to_sphere(vec:Vec3) -> Vec3{

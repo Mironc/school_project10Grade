@@ -1,8 +1,32 @@
 mod game_engine;
+use animation::animation::morph::Morphable;
 pub use game_engine::*;
+use graphics::{objects::vertex::ModelVertex, resize_event::ResizeEvent};
+use post_processing::PostProcessingContainer;
+use rendering::{camera::{Camera, MainCamera}, light::{Light, Sun}, material::Material, mesh_renderer::MeshRenderer};
+use specs::{World,WorldExt};
+use transform::Transform;
 pub extern crate graphics;
+pub extern crate animation;
 pub extern crate assets;
 pub extern crate specs;
-pub extern crate glam as math;
+pub extern crate math as math;
 pub extern crate transform;
 pub extern crate time;
+pub extern crate image;
+pub extern crate gl;
+pub extern crate rendering;
+pub extern crate lighting;
+pub extern crate post_processing;
+pub fn init(world:&mut World){
+    world.register::<MeshRenderer>();
+    world.register::<Material>();
+    world.register::<PostProcessingContainer>();
+    world.register::<Light>();
+    world.register::<Camera>();
+    world.register::<Transform>();
+    world.register::<Morphable<ModelVertex>>();
+    world.insert(ResizeEvent::default());
+    world.insert(Sun::default());
+    world.insert(MainCamera::default());
+}

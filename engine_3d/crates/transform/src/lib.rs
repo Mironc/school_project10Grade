@@ -1,7 +1,7 @@
-use glam::*;
+use math::*;
 use specs::{Component, VecStorage};
-///Quaternion based
-/// FIXME:independency of axes in quaternion causes some artifacts in use with Camera
+///
+/// FIXME:independency of axes of quaternions causes some problems when used with Camera
 /*
 #[derive(Debug, Clone, Copy)]
 pub struct Transform {
@@ -122,20 +122,33 @@ impl Component for Transform {
     type Storage = VecStorage<Self>;
 }
 */
+#[derive(Debug, Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
     rotation: Vec3,
-    pub scale: f32,
+    pub scale: Vec3,
     rot_mat: Mat4,
 }
 impl Transform {
     pub fn new(position: Vec3, rotation: Vec3, scale: f32) -> Self {
-        Self {
+        let mut s = Self {
+            rotation,
+            position,
+            scale:Vec3::ONE*scale,
+            ..Default::default()
+        };
+        s._update_rot_mat();
+        s
+    }
+    pub fn new_nonuniform_scale(position: Vec3, rotation: Vec3, scale: Vec3) -> Self {
+        let mut s = Self {
             rotation,
             position,
             scale,
             ..Default::default()
-        }
+        };
+        s._update_rot_mat();
+        s
     }
     pub fn from_position(position: Vec3) -> Self {
         Self {
@@ -149,6 +162,7 @@ impl Transform {
             ..Default::default()
         }
     }
+    #[inline]
     pub fn rotation(&self) -> Vec3 {
         self.rotation
     }
@@ -182,22 +196,28 @@ impl Transform {
     fn _update_rot_mat(&mut self) {
         self.rot_mat = Mat4::from_rotation_x(self.rotation.x.to_radians())
             * Mat4::from_rotation_y(self.rotation.y.to_radians())
-            * Mat4::from_rotation_z(self.rotation.z.to_radians())
+            * Mat4::from_rotation_z(self.rotation.z.to_radians());
     }
+    #[inline]
     pub fn right(&self) -> Vec3 {
         self.rot_mat.transform_vector3(Vec3::X)
     }
+    #[inline]
     pub fn up(&self) -> Vec3 {
         self.rot_mat.transform_vector3(Vec3::Y)
     }
+    #[inline]
     pub fn forward(&self) -> Vec3 {
         self.rot_mat.transform_vector3(Vec3::Z)
     }
+    #[inline]
     pub fn get_rotation_matrix(&self) -> Mat4{
         self.rot_mat
     }
+    #[inline]
     pub fn get_matrix(&self) -> Mat4 {
         Mat4::from_translation(self.position) * self.rot_mat * Mat4::from_scale(Vec3::ONE * self.scale) 
+
     }
 }
 impl Default for Transform {
@@ -205,7 +225,7 @@ impl Default for Transform {
         Self {
             rotation: Vec3::ZERO,
             position: Vec3::ZERO,
-            scale: 1.0,
+            scale: Vec3::ONE,
             rot_mat: Mat4::IDENTITY,
         }
     }

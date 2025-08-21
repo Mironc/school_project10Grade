@@ -1,10 +1,11 @@
-use glam::Mat4;
+use math::Mat4;
 use gl;
 
 use super::buffers::{Buffer, Data};
 pub trait Vertex: Sized {
     fn declaration();
 }
+#[allow(unused)]
 pub trait IntoGLenum {
     fn into_glenum() -> u32;
     fn instanced_attrib(index: &mut u32, update_every: u32) {}
@@ -41,7 +42,7 @@ impl_into_glenum!(
 );
 impl IntoGLenum for Mat4 {
     fn instanced_attrib(index: &mut u32, update_every: u32) {
-        let instanced_array: Buffer<Data> = Buffer::<Data>::gen();
+        let instanced_array: Buffer<Data> = Buffer::<Data>::create();
         instanced_array.bind();
         for i in 0..4 {
             unsafe {
@@ -121,5 +122,5 @@ define_vertex!(
 #[test]
 pub fn test() {
     ModelVertex::debug_decl();
-    println!("{}", mem::offset_of!(ModelVertex, texture_coords));
+    println!("{}", std::mem::offset_of!(ModelVertex, texture_coords));
 }

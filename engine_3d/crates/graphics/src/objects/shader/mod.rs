@@ -1,6 +1,6 @@
-use std::{collections::HashMap, ffi::CString};
+use std::{collections::HashMap, ffi::CString, str::FromStr, sync::Arc};
+use math::*;
 
-use glam::*;
 
 use super::{
     buffers::{ Buffer, ShaderStorage},
@@ -10,76 +10,68 @@ use super::{
 static mut CURRENT_SHADER:u32 = 0;
 #[derive(Debug, Clone)]
 pub struct Shader {
-    uniforms: HashMap<String, i32>,
+    uniforms: Arc<HashMap<String, i32>>,
     id: u32,
 }
 impl Shader {
     pub fn id(&self) -> u32 {
         self.id
     }
-    pub fn set_matrix4(&mut self, uniform_name: &str, data: &Mat4) {
+    pub fn set_matrix4(&self, uniform_name: &str, data: &Mat4) {
         self.bind();
         unsafe { gl::UniformMatrix4fv(self.u_location(uniform_name), 1, gl::FALSE, &data.to_cols_array()[0]) }
     }
-    pub fn set_vec3(&mut self, uniform_name: &str, data: &Vec3) {
+    pub fn set_matrix3(&self, uniform_name: &str, data: &Mat3) {
+        self.bind();
+        unsafe { gl::UniformMatrix3fv(self.u_location(uniform_name), 1, gl::FALSE, &data.to_cols_array()[0]) }
+    }
+    pub fn set_vec3(&self, uniform_name: &str, data: &Vec3) {
         self.bind();
         unsafe { gl::Uniform3fv(self.u_location(uniform_name), 1, &data[0]) }
     }
-    pub fn set_vec2(&mut self, uniform_name: &str, data: &Vec2) {
+    pub fn set_vec2(&self, uniform_name: &str, data: &Vec2) {
         self.bind();
         unsafe { gl::Uniform2fv(self.u_location(uniform_name), 1, &data[0]) }
     }
-    pub fn set_f32(&mut self, uniform_name: &str, data: f32) {
+    pub fn set_f32(&self, uniform_name: &str, data: f32) {
         self.bind();
         unsafe { gl::Uniform1f(self.u_location(uniform_name), data) }
     }
-    pub fn set_int(&mut self, uniform_name: &str, data: i32) {
+    pub fn set_int(&self, uniform_name: &str, data: i32) {
         self.bind();
         unsafe { gl::Uniform1i(self.u_location(uniform_name), data) }
     }
-    pub fn set_bool(&mut self, uniform_name: &str, data: bool) {
+    pub fn set_bool(&self, uniform_name: &str, data: bool) {
         self.bind();
         self.set_int(uniform_name, data.into());
     }
-    pub fn set_texture2d(&mut self, uniform_name: &str, data: &Texture2D, i: u32) {
+    pub fn set_texture2d(&self, uniform_name: &str, data: &Texture2D, i: u32) {
         self.bind();
         Texture2D::set_active(i);
         data.bind();
         self.set_int(uniform_name, i as i32);
     }
-    pub fn set_shader_storage_block(&mut self, block_name: &str, buffer: &Buffer<ShaderStorage>,block_binding:u32) {
+    pub fn set_shader_storage_block(&self, block_name: &str, buffer: &Buffer<ShaderStorage>,block_binding:u32) {
         self.bind();
         unsafe {
             buffer.bind_buffer_base(block_binding);
             gl::ShaderStorageBlockBinding ( self.id, self.shader_storage_loc(block_name), block_binding );
         }
     }
-    fn shader_storage_loc(&mut self, name: &str) -> u32 {
+    fn shader_storage_loc(& self, name: &str) -> u32 {
         if let Some(&addr) = self.uniforms.get(name) {
             addr as u32
         } else {
-            let c_name = CString::new(name).unwrap();
-            let addr = unsafe {
-                gl::GetProgramResourceIndex(self.id, gl::SHADER_STORAGE_BLOCK, c_name.as_ptr())
-            };
-            if addr == u32::MAX {
-                log::error!("no shader storage with name:{}", name);
-            }
-            self.uniforms.insert(name.to_owned(), addr as i32);
-            addr as u32
+            log::error!("no shader storage with name:{}", name);
+            u32::MAX
         }
     }
-    fn u_location(&mut self, uniform_name: &str) -> i32 {
+    fn u_location(&self, uniform_name: &str) -> i32 {
         if let Some(&addr) = self.uniforms.get(uniform_name) {
             addr
         } else {
-            let cuniform_name = CString::new(uniform_name).unwrap();
-            let addr = unsafe { gl::GetUniformLocation(self.id, cuniform_name.as_ptr()) };
-            if addr == -1 {
-                log::error!("no uniform with name:{}", uniform_name);
-            }
-            self.uniforms.insert(uniform_name.to_owned(), addr);
-            addr
+            log::error!("no uniform with name:{}", uniform_name);
+            -1
         }
     }
 }
@@ -107,9 +99,43 @@ impl Shader {
             for subshader in iter {
                 gl::DetachShader(id, subshader.id);
             }
+            let mut uniforms = HashMap::new();
+            let mut uniform_count = 0;
+            gl::GetProgramInterfaceiv(id, gl::UNIFORM, gl::ACTIVE_RESOURCES, &mut uniform_count);
+            for i in 0..uniform_count {
+                let mut results = [0];
+                let mut props = [gl::NAME_LENGTH];
+                gl::GetProgramResourceiv(id, gl::UNIFORM, i as u32, 1, props.as_ptr(),1, std::ptr::null_mut(), results.as_mut_ptr());
+
+                
+                let mut buff = vec![0u8; results[0] as usize];
+                gl::GetProgramResourceName(id, gl::UNIFORM, i as u32, results[0] as i32, std::ptr::null_mut(), buff.as_mut_ptr() as *mut i8);
+                let name = std::ffi::CStr::from_bytes_with_nul_unchecked(&buff)
+                    .to_str()
+                    .unwrap();
+                let loc = gl::GetUniformLocation(id, CString::from_str(name).unwrap().as_ptr());
+                //println!("SUCCESS {} {}",name,loc);
+                uniforms.insert(name.to_string(), loc);
+            }
+            gl::GetProgramInterfaceiv(id, gl::SHADER_STORAGE_BLOCK, gl::ACTIVE_RESOURCES, &mut uniform_count);
+            for i in 0..uniform_count {
+                let mut results = [0];
+                let mut props = [gl::NAME_LENGTH];
+                gl::GetProgramResourceiv(id, gl::SHADER_STORAGE_BLOCK, i as u32, 1, props.as_ptr(),1, std::ptr::null_mut(), results.as_mut_ptr());
+
+                
+                let mut buff = vec![0u8; results[0] as usize];
+                gl::GetProgramResourceName(id, gl::SHADER_STORAGE_BLOCK, i as u32, results[0] as i32, std::ptr::null_mut(), buff.as_mut_ptr() as *mut i8);
+                let name = std::ffi::CStr::from_bytes_with_nul_unchecked(&buff)
+                    .to_str()
+                    .unwrap();
+                let loc = gl::GetProgramResourceIndex(id, gl::SHADER_STORAGE_BLOCK,CString::from_str(name).unwrap().as_ptr());
+                //println!("SUCCESS {} {}",name,loc);
+                uniforms.insert(name.to_string(), loc as i32);
+            }
             Self {
                 id,
-                uniforms: HashMap::new(),
+                uniforms:Arc::new(uniforms),
             }
         }
     }

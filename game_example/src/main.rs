@@ -1,22 +1,6 @@
-use engine_3d::{
-    assets::{image_importer::ImageImporter, model_importer::Modelmporter},
-    graphics::{
-        self as graphics, depth, ecs::{
-            postprocessing::{PostProcessing, SimplePostProcessing}, projection::*, Camera, CameraTransform,
-            DeferredRendering, ForwardRendering, Light, LightProperties, MainCamera, Material,
-            MeshRenderer, OnResizeEvent, RenderSystem, Sun, FULLSCREENPASS_VERTEX_SHADER,
-        }, face_culling, objects::{
-            buffers::{Framebuffer, FramebufferAttachment}, shader::{Shader, ShaderType, SubShader}, texture::{Filter, Texture2D, Texture2DBuilder, TextureFormat, TextureWrap}, viewport::Viewport
-        }
-    },
-    math::Vec3, window::gl_config_picker,
-};
+
 pub mod free_cam;
-use engine_3d::assets::Assets;
-use engine_3d::math::vec3;
-use engine_3d::specs::*;
-use engine_3d::transform::Transform;
-use engine_3d::{window::WindowConfig, Application};
+use engine_3d::{assets::{image_importer::ImageImporter, model_importer::Modelmporter, Assets}, graphics::objects::texture::{Filter, Texture2DBuilder}, math::{vec3, Vec3}, post_processing::{PostProcessing, PostProcessingContainer, PostProcessingSystem, SimpleColorProcessing}, rendering::{camera::{projection::{Perspective, Projection}, Camera, CameraTransform, MainCamera, OnResizeEvent}, composition::CompositionSystem, light::{Light, LightProperties}, lit_shading::DeferredPath, material::Material, mesh_renderer::MeshRenderer, render_system::RenderSystem}, specs::{Builder, DispatcherBuilder, World, WorldExt}, transform::Transform, window::WindowConfig, Application};
 use free_cam::FreeCameraSystem;
 use rand::{Rng, SeedableRng};
 
@@ -31,11 +15,14 @@ fn main() {
     for arg in std::env::args() {
         println!("{}", arg);
     }
-
-    let app = Application::new(WINDOW_CONFIG);
+    let mut win_conf = WINDOW_CONFIG;
+    win_conf.icon = Some(
+        engine_3d::image::load_from_memory(include_bytes!("../ico.jpg")).expect("error with ico"),
+    );
+    let app = Application::new(win_conf);
     let mut assets = Assets::from_data_file("assets.data").unwrap();
     let mut world = World::new();
-    graphics::ecs::init(&mut world);
+    engine_3d::init(&mut world);
     /* let model = assets
     .import_model(&"models/pool.obj")
     .unwrap()
@@ -127,12 +114,18 @@ fn main() {
             0.125,
         ))
         .with(Material {
-            shininess: 8.0,
+            shininess: 16.0,
             main_texture: checked_texture.clone(),
             ..Default::default()
         })
         .build();
+    let mut postprocessing_container = PostProcessingContainer::new();
+    postprocessing_container.set_f(|p,mut f, t| {
+        let mut simple = p.get_mut::<SimpleColorProcessing>().unwrap();
+        simple.apply_to(&mut f, t.clone());
+    });
 
+    postprocessing_container.insert(SimpleColorProcessing::new(1.0, 1.0, 1.0, 0.0, 0.6, 1.));
     let main_camera = world
         .create_entity()
         .with(Camera::new(
@@ -143,21 +136,21 @@ fn main() {
                 app.app_state.window.viewport(),
             )),
             CameraTransform::new(vec3(0.0, 2.0, 6.0), vec3(0.0, 0.7, 0.0)),
+            app.app_state.window.viewport(),
+            DeferredPath::new(app.app_state.window.viewport(), vec3(0.0, 0.0, 0.0)),
         ))
+        .with(postprocessing_container.clone())
         .build();
-    world.insert(MainCamera::new(
-        main_camera,
-        app.app_state.window.viewport(),
-    ));
+    world.fetch_mut::<MainCamera>().set(main_camera);
 
-    //world.insert(Sun::new(vec3(-1.0, -1.0, 0.0), vec3(0.9, 0.84, 0.19)));
-    let n = 1000;
+    // world.insert(Sun::new(vec3(-1.0, -1.0, 0.0), vec3(0.9, 0.84, 0.19)));
+    let n = 100;
     let mut rand = rand::prelude::StdRng::from_seed([102; 32]);
     for _ in 0..n {
         world
             .create_entity()
             .with(Light::Point(LightProperties {
-                power: rand.gen_range(3.0..5.0),
+                power: rand.gen_range(3.0..10.0),
                 color: vec3(
                     rand.gen_range(0.1..1.0),
                     rand.gen_range(0.1..1.0),
@@ -182,7 +175,7 @@ fn main() {
     world
         .create_entity()
         .with(Light::Point(LightProperties {
-            power: 50.0,
+            power: 5.0,
             color: vec3(1.0, 0.0, 0.9),
         }))
         .with(Transform::from_position(vec3(1.0, 2.0, 30.0)))
@@ -200,12 +193,9 @@ fn main() {
             &[],
         )
         .with_thread_local(OnResizeEvent {})
-        .with_thread_local(RenderSystem::new(
-            //ForwardRendering::new(app.app_state.window.viewport(), true),
-            DeferredRendering::new(app.app_state.window.viewport()),
-            app.app_state.window.viewport(),
-            SimplePostProcessing::new(0.8, 1.0, 1.1, -0.0, 0.6, 1., app.app_state.window.viewport()),
-        ))
+        .with_thread_local(RenderSystem::new())
+        .with_thread_local(PostProcessingSystem {})
+        .with_thread_local(CompositionSystem::new())
         .build();
     app.run(world, dispatcher)
 }

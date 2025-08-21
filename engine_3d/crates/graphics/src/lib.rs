@@ -1,9 +1,5 @@
 pub mod objects;
-pub mod ecs;
-pub mod depth;
-pub mod stencil;
-pub mod color;
-pub mod face_culling;
-pub mod blending;
+pub mod draw_options;
 pub mod compare_opt;
 pub mod utils;
+pub mod resize_event;

@@ -1,6 +1,25 @@
-use std::{error::Error, fmt::Display};
+use std::{
+    error::Error,
+    fmt::Display,
+    ptr::NonNull,
+    sync::{atomic::AtomicUsize, LazyLock, Mutex},
+};
+pub mod texture;
+pub mod texture_handle;
+pub mod texture_trait;
+pub mod texture_type;
 
 use image::{DynamicImage, EncodableLayout, GenericImageView, RgbaImage};
+
+use crate::{
+    objects::texture::texture_type::TextureTypeTrait, utils::{end_debug_marker, start_debug_marker, COPY_FRAGMENT_SHADER, EMPTY, FULLSCREENPASS_VERTEX_SHADER}
+};
+
+use super::{
+    buffers::{Framebuffer, FramebufferAttachment},
+    shader::{Shader, ShaderType, SubShader},
+    viewport::Viewport,
+};
 /// default filtering is Filter::Repeat and default texture wrap is TextureWrap::Nearest
 #[derive(Debug, Clone)]
 pub struct Texture2DBuilder {
@@ -9,7 +28,7 @@ pub struct Texture2DBuilder {
     texture_size: (i32, i32),
     texture_format: TextureFormat,
     internal_format: TextureFormat,
-    texture_type: TextureType,
+    texture_type: TextureDataType,
 }
 impl Texture2DBuilder {
     pub fn new() -> Self {
@@ -21,14 +40,14 @@ impl Texture2DBuilder {
             texture_format: TextureFormat::RGBA,
             internal_format: TextureFormat::RGBA,
             texture_size: (0, 0),
-            texture_type: TextureType::UnsignedByte,
+            texture_type: TextureDataType::UnsignedByte,
         }
     }
     pub fn texture_format(mut self, texture_format: TextureFormat) -> Self {
         self.texture_format = texture_format;
         self
     }
-    pub fn texture_type(mut self, texture_type: TextureType) -> Self {
+    pub fn texture_type(mut self, texture_type: TextureDataType) -> Self {
         self.texture_type = texture_type;
         self
     }
@@ -98,18 +117,26 @@ impl Display for BuildError {
     }
 }
 impl Error for BuildError {}
-#[derive(Debug, Clone)]
+static mut DRAWFB: LazyLock<Mutex<Framebuffer>> = LazyLock::new(|| {
+    Mutex::new({
+        let fb = Framebuffer::new(Viewport::new(0, 0, 1, 1));
+        fb
+    })
+});
+
+#[derive(Debug)]
 pub struct Texture2D {
     id: u32,
+    counter: NonNull<AtomicUsize>,
     wrap_x: TextureWrap,
     wrap_y: TextureWrap,
     min_filter: Filter,
     mag_filter: Filter,
-    data_type: TextureType,
+    data_type: TextureDataType,
     internal_format: TextureFormat,
     texture_format: TextureFormat,
-    height:i32,
-    width:i32,
+    height: i32,
+    width: i32,
 }
 impl Texture2D {
     pub fn new() -> Self {
@@ -118,16 +145,56 @@ impl Texture2D {
             gl::GenTextures(1, &mut id);
             Self {
                 id,
+                counter: NonNull::from(Box::leak(Box::new(AtomicUsize::new(1)))),
                 wrap_x: TextureWrap::Repeat,
                 wrap_y: TextureWrap::Repeat,
                 min_filter: Filter::Nearest,
                 mag_filter: Filter::Nearest,
                 internal_format: TextureFormat::RGBA,
                 texture_format: TextureFormat::RGBA,
-                data_type: TextureType::UnsignedByte,
+                data_type: TextureDataType::UnsignedByte,
                 height: 0,
                 width: 0,
             }
+        }
+    }
+    pub fn copy_to(&self, other: &Self) {
+        start_debug_marker("copy");
+        unsafe {
+            let mut drawfb = DRAWFB.lock().unwrap();
+            drawfb.draw_bind();
+            let mut copysh = COPY_FRAGMENT_SHADER.lock().unwrap();
+            copysh.set_texture2d("color", self, 0);
+            drawfb.add_attachment(
+                super::buffers::FramebufferAttachment::Color(0),
+                other.clone(),
+            );
+            let shader: &Shader = &*copysh;
+            shader.bind();
+            Viewport::new(0, 0, other.width, other.height).set_gl_viewport();
+            EMPTY.draw();
+        }
+        end_debug_marker();
+    }
+    pub fn dcopy_to(&self, other: &Self) {
+        unsafe {
+            gl::CopyImageSubData(
+                self.id,
+                gl::TEXTURE_2D,
+                0,
+                0,
+                0,
+                0,
+                other.id,
+                gl::TEXTURE_2D,
+                0,
+                0,
+                0,
+                0,
+                self.height,
+                self.width,
+                0,
+            );
         }
     }
     pub fn gen_mipmaps(&self) {
@@ -152,7 +219,7 @@ impl Texture2D {
     pub fn texture_format(&self) -> TextureFormat {
         self.texture_format
     }
-    pub fn texture_type(&self) -> TextureType {
+    pub fn texture_type(&self) -> TextureDataType {
         self.data_type
     }
     pub fn mag_filter(&self) -> Filter {
@@ -167,10 +234,10 @@ impl Texture2D {
     pub fn wrap_y(&self) -> TextureWrap {
         self.wrap_y
     }
-    pub fn width(&self) -> i32{
+    pub fn width(&self) -> i32 {
         self.width
     }
-    pub fn height(&self) -> i32{
+    pub fn height(&self) -> i32 {
         self.height
     }
     pub fn white() -> Self {
@@ -237,12 +304,12 @@ impl Texture2D {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
-                internal_format.to_internal_format_code() as i32,
+                internal_format.into_glenum() as i32,
                 size.0 as i32,
                 size.1 as i32,
                 0,
-                TextureFormat::RGBA.to_internal_format_code(),
-                TextureType::UnsignedByte.into_glenum(),
+                TextureFormat::RGBA.into_glenum(),
+                TextureDataType::UnsignedByte.into_glenum(),
                 match image_source {
                     DynamicImage::ImageRgba8(img) => img,
                     x => x.to_rgba8(),
@@ -256,7 +323,7 @@ impl Texture2D {
         &mut self,
         internal_format: TextureFormat,
         texture_format: TextureFormat,
-        texture_type: TextureType,
+        texture_type: TextureDataType,
         width: i32,
         height: i32,
     ) {
@@ -269,23 +336,87 @@ impl Texture2D {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
-                internal_format.to_internal_format_code() as i32,
+                internal_format.into_glenum() as i32,
                 width,
                 height,
                 0,
-                texture_format.to_internal_format_code(),
+                texture_format.into_glenum(),
                 texture_type.into_glenum(),
                 std::ptr::null(),
             )
         }
     }
 }
-/// Texture wrap is defining behaviour, when you try to get a pixel beyond borders
+impl Default for Texture2D {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            wrap_x: TextureWrap::Repeat,
+            wrap_y: TextureWrap::Repeat,
+            min_filter: Filter::Nearest,
+            mag_filter: Filter::Nearest,
+            data_type: TextureDataType::Byte,
+            internal_format: TextureFormat::RGBA,
+            texture_format: TextureFormat::RGBA,
+            height: 0,
+            width: 0,
+            counter: NonNull::from(Box::leak(Box::new(AtomicUsize::new(1)))),
+        }
+    }
+}
+
+impl Clone for Texture2D {
+    fn clone(&self) -> Self {
+        let new_size = unsafe {
+            self.counter
+                .as_ref()
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        };
+        if new_size > usize::MAX / 2 {
+            std::process::abort();
+        }
+        Self {
+            id: self.id.clone(),
+            counter: self.counter,
+            wrap_x: self.wrap_x.clone(),
+            wrap_y: self.wrap_y.clone(),
+            min_filter: self.min_filter.clone(),
+            mag_filter: self.mag_filter.clone(),
+            data_type: self.data_type.clone(),
+            internal_format: self.internal_format.clone(),
+            texture_format: self.texture_format.clone(),
+            height: self.height.clone(),
+            width: self.width.clone(),
+        }
+    }
+}
+impl Drop for Texture2D {
+    fn drop(&mut self) {
+        unsafe {
+            let sub = self
+                .counter
+                .as_ref()
+                .fetch_sub(1, std::sync::atomic::Ordering::Release);
+            if sub != 1 {
+                return;
+            }
+            println!("{} actually dropped", self.id);
+            gl::DeleteTextures(1, &mut self.id);
+            drop(Box::from_raw(self.counter.as_ptr()));
+        }
+    }
+}
+
+/// Texture wrap is defined behaviour, when you try to get a pixel beyond borders
 #[derive(Debug, Clone, Copy)]
 pub enum TextureWrap {
+    /// Repeats the texture image.
     Repeat,
+    /// Gives the closest edge color.
     ClampToEdge,
+    /// Same as Repeat, but mirrors the image every iteration.
     MirroredRepeat,
+    /// Gives use defined color. TODO: NOT IMPLEMENTED RN.
     ClampToBorder,
 }
 impl TextureWrap {
@@ -298,12 +429,16 @@ impl TextureWrap {
         }
     }
 }
-/// Defines behaviour when accessing between pixels
+/// Determines the behavior of the color sampling
 #[derive(Debug, Clone, Copy)]
 pub enum Filter {
+    /// Bilinear filter. Gives the interpolated value of neighbouring pixels
     Linear,
+    /// Point filter. Gives the nearest to the sample pixel
     Nearest,
+    ///
     NearestLinearMipMap,
+    ///
     NearestMipMap,
 }
 impl Filter {
@@ -317,26 +452,44 @@ impl Filter {
     }
 }
 #[derive(Debug, Clone, Copy)]
-pub enum TextureType {
+pub enum TextureDataType {
     Byte,
     Int,
     UnsignedInt,
     UnsignedByte,
     UnsignedInt24_8,
+    UnsignedInt5_999,
+    Float32UnsignedInt8,
     Float,
     HalfFloat,
 }
-impl TextureType {
+impl TextureDataType {
     pub fn into_glenum(&self) -> u32 {
         match self {
-            TextureType::UnsignedInt => gl::UNSIGNED_INT,
-            TextureType::UnsignedByte => gl::UNSIGNED_BYTE,
-            TextureType::Float => gl::FLOAT,
-            TextureType::HalfFloat => gl::HALF_FLOAT,
-            TextureType::UnsignedInt24_8 => gl::UNSIGNED_INT_24_8,
-            TextureType::Int => gl::INT,
-            TextureType::Byte => gl::BYTE,
+            TextureDataType::UnsignedInt => gl::UNSIGNED_INT,
+            TextureDataType::UnsignedByte => gl::UNSIGNED_BYTE,
+            TextureDataType::Float => gl::FLOAT,
+            TextureDataType::HalfFloat => gl::HALF_FLOAT,
+            TextureDataType::UnsignedInt24_8 => gl::UNSIGNED_INT_24_8,
+            TextureDataType::Int => gl::INT,
+            TextureDataType::Byte => gl::BYTE,
+            TextureDataType::UnsignedInt5_999 => gl::UNSIGNED_INT_5_9_9_9_REV,
+            TextureDataType::Float32UnsignedInt8 => gl::FLOAT_32_UNSIGNED_INT_24_8_REV,
         }
+    }
+    pub fn from_glenum(glenum: u32) -> Option<Self> {
+        Some(match glenum {
+            gl::UNSIGNED_INT => TextureDataType::UnsignedInt,
+            gl::UNSIGNED_BYTE => TextureDataType::UnsignedByte,
+            gl::FLOAT => TextureDataType::Float,
+            gl::HALF_FLOAT => TextureDataType::HalfFloat,
+            gl::UNSIGNED_INT_24_8 => TextureDataType::UnsignedInt24_8,
+            gl::INT => TextureDataType::Int,
+            gl::BYTE => TextureDataType::Byte,
+            gl::UNSIGNED_INT_5_9_9_9_REV => TextureDataType::UnsignedInt5_999,
+            gl::FLOAT_32_UNSIGNED_INT_24_8_REV => TextureDataType::Float32UnsignedInt8,
+            _ => return None,
+        })
     }
 }
 ///Defines format of image in which it will be stored
@@ -364,18 +517,20 @@ pub enum TextureFormat {
     StencilIndex,
     //Depth+Stencil
     Depth24Stencil8,
+    Depth32FStencil8,
     DepthStencilComponent,
     //depth
     DepthComponent,
     DepthComponent32F,
-    RgbaSrgb,
+    SrgbA,
+    SRGB,
     BGRA,
     R11G11B10F,
     RGB9E5,
     RG16F,
 }
 impl TextureFormat {
-    pub fn to_internal_format_code(&self) -> u32 {
+    pub fn into_glenum(&self) -> u32 {
         match self {
             TextureFormat::RGBA => gl::RGBA,
             TextureFormat::RGB => gl::RGB,
@@ -388,7 +543,7 @@ impl TextureFormat {
             TextureFormat::StencilIndex => gl::STENCIL_INDEX,
             TextureFormat::RGBA16 => gl::RGBA16,
             TextureFormat::RGB16 => gl::RGB16,
-            TextureFormat::RgbaSrgb => gl::SRGB_ALPHA,
+            TextureFormat::SrgbA => gl::SRGB_ALPHA,
             TextureFormat::BGRA => gl::BGRA,
             TextureFormat::R11G11B10F => gl::R11F_G11F_B10F,
             TextureFormat::RGB9E5 => gl::RGB9_E5,
@@ -401,33 +556,67 @@ impl TextureFormat {
             TextureFormat::Stencil8 => gl::STENCIL_INDEX8,
             TextureFormat::RGB10A2 => gl::RGB10_A2,
             TextureFormat::RGBA8SNorm => gl::RGBA8_SNORM,
+            TextureFormat::SRGB => gl::SRGB,
+            TextureFormat::Depth32FStencil8 => gl::DEPTH32F_STENCIL8,
         }
     }
-    pub fn to_texture_type(&self) -> TextureType {
-        match self {
-            TextureFormat::RGBAu32 | TextureFormat::RGBu32 => TextureType::UnsignedInt,
-            TextureFormat::RGBA16F
-            | TextureFormat::RG16F
-            | Self::R11G11B10F
-            | Self::DepthComponent32F
-            | TextureFormat::RGB16F => TextureType::Float,
-
-            TextureFormat::RGB8SNorm | TextureFormat::RGBA8SNorm => TextureType::Byte,
-            TextureFormat::Stencil8
-            | TextureFormat::StencilIndex
-            | TextureFormat::DepthStencilComponent
-            | TextureFormat::RGBA8
-            | TextureFormat::RGB8
-            | TextureFormat::RGBA
-            | TextureFormat::RGB
-            | TextureFormat::RGB16
-            | TextureFormat::RGBA16
-            | TextureFormat::DepthComponent
-            | TextureFormat::BGRA
-            | TextureFormat::RGB9E5
-            | TextureFormat::RGB10A2
-            | TextureFormat::RgbaSrgb => TextureType::UnsignedByte,
-            TextureFormat::Depth24Stencil8 => TextureType::UnsignedInt24_8,
+    pub fn from_glenum(glenum: u32) -> Option<Self> {
+        Some(match glenum {
+            gl::RGBA => TextureFormat::RGBA,
+            gl::RGB => TextureFormat::RGB,
+            gl::RGBA16F => TextureFormat::RGBA16F,
+            gl::RGB16F => TextureFormat::RGB16F,
+            gl::RGB8 => TextureFormat::RGB8,
+            gl::RGBA8 => TextureFormat::RGBA8,
+            gl::DEPTH_COMPONENT32F => TextureFormat::DepthComponent32F,
+            gl::DEPTH_COMPONENT => TextureFormat::DepthComponent,
+            gl::STENCIL_INDEX => TextureFormat::StencilIndex,
+            gl::RGBA16 => TextureFormat::RGBA16,
+            gl::RGB16 => TextureFormat::RGB16,
+            gl::SRGB_ALPHA => TextureFormat::SrgbA,
+            gl::BGRA => TextureFormat::BGRA,
+            gl::R11F_G11F_B10F => TextureFormat::R11G11B10F,
+            gl::RGB9_E5 => TextureFormat::RGB9E5,
+            gl::RGBA32UI => TextureFormat::RGBAu32,
+            gl::RGB32UI => TextureFormat::RGBu32,
+            gl::RGB8_SNORM => TextureFormat::RGB8SNorm,
+            gl::RG16F => TextureFormat::RG16F,
+            gl::DEPTH24_STENCIL8 => TextureFormat::Depth24Stencil8,
+            gl::DEPTH_STENCIL => TextureFormat::DepthStencilComponent,
+            gl::STENCIL_INDEX8 => TextureFormat::Stencil8,
+            gl::RGB10_A2 => TextureFormat::RGB10A2,
+            gl::RGBA8_SNORM => TextureFormat::RGBA8SNorm,
+            gl::SRGB => TextureFormat::SRGB,
+            gl::DEPTH32F_STENCIL8 => TextureFormat::Depth32FStencil8,
+            _ => return None,
+        })
+    }
+    ///gives compatible texture format for given internal format
+    pub fn to_texture_format<T: TextureTypeTrait>(&self) -> TextureFormat {
+        let mut format = 0;
+        unsafe {
+            gl::GetInternalformativ(
+                T::texture_type().into_glenum(),
+                self.into_glenum(),
+                gl::TEXTURE_IMAGE_FORMAT,
+                1,
+                &mut format,
+            );
         }
+        Self::from_glenum(format as u32).unwrap()
+    }
+    ///gives compatible texture data for given internal format
+    pub fn to_texture_type<T: TextureTypeTrait>(&self) -> TextureDataType {
+        let mut r#type = 0;
+        unsafe {
+            gl::GetInternalformativ(
+                T::texture_type().into_glenum(),
+                self.into_glenum(),
+                gl::TEXTURE_IMAGE_TYPE,
+                1,
+                &mut r#type,
+            );
+        }
+        TextureDataType::from_glenum(r#type as u32).unwrap()
     }
 }

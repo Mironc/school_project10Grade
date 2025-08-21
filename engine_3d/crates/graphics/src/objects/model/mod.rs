@@ -3,8 +3,32 @@ use super::{
     vertex::{ModelVertex, Vertex},
 };
 pub mod primitives;
-use glam::Vec3;
-//TODO:Load of material with part drawing 
+use math::{Vec2, Vec3};
+/* 
+#[derive(Debug, Clone)]
+pub struct NewModel{
+    verticies:Vec<Vec3>,
+    normals:Option<Vec<Vec3>>,
+    uv:Option<Vec<Vec2>>,
+    triangles:Option<Vec<u32>>
+}
+impl NewModel {
+    pub fn instantiate(&self){
+        let mut sequential_attributes: Vec<f32> = Vec::new();
+        if let Some(triangles) = &self.triangles{
+            for &id in triangles {
+                sequential_attributes.append(&mut self.verticies[id as usize].to_array().to_vec());
+                if let Some(normals) = &self.normals {
+                    sequential_attributes.append(&mut normals[id as usize].to_array().to_vec());
+                }
+                if let Some(uvs) = &self.uv{
+                    sequential_attributes.append(&mut uvs[id as usize].to_array().to_vec());
+                }
+            }
+        }
+    }
+} */
+//TODO:Material, partial drawing 
 #[derive(Debug, Clone)]
 pub struct Model<V: Vertex> {
     pub verticies: Vec<V>,
@@ -16,6 +40,111 @@ impl<V: Vertex> Model<V> {
     }
     pub fn instantiate(&self) -> InstancedModel {
         InstancedModel::new(&self)
+    }
+    pub fn from_str(source:&str) -> Option<Model<ModelVertex>> {
+        fn calc_normal(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
+            let a_side = Vec3::new(a[0], a[1], a[2]) - Vec3::new(b[0], b[1], b[2]);
+            let c_side = Vec3::new(b[0], b[1], b[2]) - Vec3::new(c[0], c[1], c[2]);
+            a_side.cross(c_side).normalize().into()
+        }
+        let mut v_pos = Vec::new();
+        let mut v_normal = Vec::new();
+        let mut v_uv = Vec::new();
+        let mut indicies = Vec::new();
+        let mut vertexes = Vec::new();
+        for line in source.lines() {
+            let mut separated = line.split(" ");
+            match separated.next()? {
+                "v" => v_pos.push([
+                    separated.next()?.parse::<f32>().ok()?,
+                    separated.next()?.parse::<f32>().ok()?,
+                    separated.next()?.parse::<f32>().ok()?,
+                ]),
+                "vn" => v_normal.push([
+                    separated.next()?.parse::<f32>().ok()?,
+                    separated.next()?.parse::<f32>().ok()?,
+                    separated.next()?.parse::<f32>().ok()?,
+                ]),
+                "vt" => v_uv.push([
+                    separated.next()?.parse::<f32>().ok()?,
+                    separated.next()?.parse::<f32>().ok()?,
+                ]),
+                "f" => {
+                    let mut positions = [0; 3];
+                    let mut normals = [None; 3];
+                    let mut uvs = [None; 3];
+                    for i in 0..3 {
+                        let mut vertex_indexes = separated.next()?.split("/");
+                        positions[i] = vertex_indexes.next()?.parse::<u32>().ok()? - 1;
+                        if let Some(uv) = vertex_indexes.next() {
+                            if let Some(idx) = uv.parse::<u32>().ok() {
+                                uvs[i] = Some(idx - 1);
+                            }
+                        }
+                        if let Some(normal) = vertex_indexes.next() {
+                            if let Some(idx) = normal.parse::<u32>().ok() {
+                                normals[i] = Some(idx - 1);
+                            }
+                        }
+                    }
+                    match (true, normals[0].is_some(), uvs[0].is_some()) {
+                        (true, true, true) => {
+                            for i in 0..3 {
+                                vertexes.push(ModelVertex::new(
+                                    v_pos[positions[i] as usize],
+                                    v_normal[normals[i].unwrap() as usize],
+                                    v_uv[uvs[i].unwrap() as usize],
+                                ));
+                                indicies.push(indicies.len() as u32);
+                            }
+                        }
+                        (true, true, false) => {
+                            for i in 0..3 {
+                                vertexes.push(ModelVertex::new(
+                                    v_pos[positions[i] as usize],
+                                    v_normal[normals[i].unwrap() as usize],
+                                    [0.0, 0.0],
+                                ));
+                                indicies.push(indicies.len() as u32);
+                            }
+                        }
+                        (true, false, true) => {
+                            let v_normal = calc_normal(
+                                &v_pos[positions[0] as usize],
+                                &v_pos[positions[1] as usize],
+                                &v_pos[positions[2] as usize],
+                            );
+                            for i in 0..3 {
+                                vertexes.push(ModelVertex::new(
+                                    v_pos[positions[i] as usize],
+                                    v_normal,
+                                    v_uv[uvs[i].unwrap() as usize],
+                                ));
+                                indicies.push(indicies.len() as u32);
+                            }
+                        }
+                        (true, false, false) => {
+                            let v_normal = calc_normal(
+                                &v_pos[positions[0] as usize],
+                                &v_pos[positions[1] as usize],
+                                &v_pos[positions[2] as usize],
+                            );
+                            for i in 0..3 {
+                                vertexes.push(ModelVertex::new(
+                                    v_pos[positions[i] as usize],
+                                    v_normal,
+                                    [0.0, 0.0],
+                                ));
+                                indicies.push(indicies.len() as u32);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                _ => (),
+            }
+        }
+        return Some(Model::new(vertexes, Some(indicies)))
     }
 }
 
@@ -137,8 +266,8 @@ impl InstancedModel {
     pub fn new<T: Vertex>(model: &Model<T>) -> Self {
         let vao = VAO::new();
         vao.bind();
-        let vbo: Buffer<VBO> = Buffer::gen();
-        let ebo: Buffer<EBO> = Buffer::gen();
+        let vbo: Buffer<VBO> = Buffer::create();
+        let ebo: Buffer<EBO> = Buffer::create();
         vbo.bind();
         vbo.set_data(&model.verticies);
         let mut len = model.verticies.len();
@@ -156,10 +285,28 @@ impl InstancedModel {
             vertex_count: len as i32,
         }
     }
+    pub fn upload_model<T:Vertex>(&mut self,model: Model<T>){
+        self.vbo.bind();
+        self.vbo.set_data(&model.verticies);
+        if let Some(indicies) = &model.indicies{
+            if let Some(ebo) = &mut self.ebo{
+                ebo.bind();
+                ebo.set_data(&indicies);
+
+            }
+            else{
+                self.ebo = Some(Buffer::create());
+                let ebo = self.ebo.as_mut().unwrap();
+                ebo.bind();
+                ebo.set_data(&indicies);
+            }
+        }
+    }
+    ///Creates a model with a given amount of points, but with no data assigned to them
     pub fn new_without_vertex(vertex_count:i32) ->Self{
         let vao = VAO::new();
         vao.bind();
-        let vbo: Buffer<VBO> = Buffer::gen();
+        let vbo: Buffer<VBO> = Buffer::create();
         vbo.bind();
         Self { vao, vbo, ebo: None, vertex_count }
     }

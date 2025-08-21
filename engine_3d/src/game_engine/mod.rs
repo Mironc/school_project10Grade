@@ -1,7 +1,7 @@
 pub mod event_handler;
 pub mod input_handler;
 pub mod window;
-use graphics::ecs::ResizeEvent;
+use graphics::resize_event::ResizeEvent;
 use input_handler::InputHandler;
 use specs::{Dispatcher, World, WorldExt};
 use window::{Window, WindowConfig};
@@ -34,10 +34,8 @@ impl ApplicationState {
         if let Some(dispatcher) = self.dispatcher.as_mut() {
             if let Some(world) = self.world.as_mut() {
                 world.write_resource::<time::Time>().update();
-                let time = world.read_resource::<time::Time>();
                 dispatcher.dispatch(&world);
                 self.input_handler._update();
-                world.write_resource::<ResizeEvent>().end();
                 self.window.request_redraw();
                 self.window.show_frame();
             }
@@ -102,11 +100,6 @@ impl Application {
         world.insert(self.app_state.input_handler.input_state());
         self.app_state.dispatcher = Some(dispatcher);
         self.app_state.world = Some(world);
-        self.app_state
-            .dispatcher
-            .as_mut()
-            .unwrap()
-            .dispatch(&self.app_state.world.as_ref().unwrap());
         let _ = EventLoop::run_app(self.event_loop, &mut self.app_state);
     }
 }

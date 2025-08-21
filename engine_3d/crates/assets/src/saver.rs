@@ -33,7 +33,7 @@ fn open_file(path: impl AsRef<Path>) -> Result<fs::File> {
     fs::OpenOptions::new().read(true).open(path)
 }
 pub fn create_data_file_to(assets_folder: impl AsRef<Path>,data_file_folder_path:impl AsRef<Path>) -> Result<()>{
-    let data_file = fs::File::create(data_file_folder_path)?;
+    let mut data_file = fs::File::create(data_file_folder_path)?;
     let mut data_file_writer = BufWriter::new(data_file.try_clone()?);
 
     let directories = get_directories(assets_folder.as_ref(), assets_folder.as_ref())?;
@@ -54,6 +54,7 @@ pub fn create_data_file_to(assets_folder: impl AsRef<Path>,data_file_folder_path
             data_file_writer.write(compressed_data.as_slice())?;
         }
     }
+    data_file.flush().unwrap();
     Ok(())
 }
 ///creates asset file
